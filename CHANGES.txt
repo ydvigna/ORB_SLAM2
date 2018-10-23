@@ -1,0 +1,7 @@
+ORB SLAM2 modified by Yuri Yasuda to work with Lego NXT module via bluetooth.
+Control of NXT is done by Computer Vision techniques.
+
+Changes from original:
+- ROS Examples folder: New node for NXT control with computer vision
+- Added new node to CMakeLists.txt
+
