@@ -66,6 +66,18 @@ target_link_libraries(Mono
 ${LIBS}
 )
 
+# Node for monocular camera (with Computer Vision and NXT Control)
+rosbuild_add_executable(NXT
+src/NXT/ros_mono_nxt.cc
+src/NXT/ControllerNXT.h
+src/NXT/ControllerNXT.cc
+)
+
+target_link_libraries(NXT
+${LIBS}
+bluetooth
+)
+
 # Node for monocular camera (Augmented Reality Demo)
 rosbuild_add_executable(MonoAR
 src/AR/ros_mono_ar.cc
