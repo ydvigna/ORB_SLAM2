@@ -18,6 +18,10 @@
 * along with ORB-SLAM2. If not, see <http://www.gnu.org/licenses/>.
 */
 
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
+
 #include "Viewer.h"
 #include <pangolin/pangolin.h>
 
@@ -89,6 +93,9 @@ void Viewer::Run()
 
     cv::namedWindow("ORB-SLAM2: Current Frame");
 
+    // NXT: show new window for image of path
+    cv::namedWindow("ORB-SLAM2: Path Detection");
+
     bool bFollow = true;
     bool bLocalizationMode = false;
 
@@ -136,6 +143,12 @@ void Viewer::Run()
 
         cv::Mat im = mpFrameDrawer->DrawFrame();
         cv::imshow("ORB-SLAM2: Current Frame",im);
+        
+        // NXT: Image of path (computed by ControllerNXT)
+        cv::Mat imPath = mpSystem->GetImagePath();
+        if (!imPath.empty())
+            cv::imshow("ORB-SLAM2: My Test Frame",imPath);
+
         cv::waitKey(mT);
 
         if(menuReset)

@@ -19,6 +19,9 @@
 */
 
 
+#include <unistd.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "System.h"
 #include "Converter.h"
@@ -315,7 +318,7 @@ void System::Shutdown()
         usleep(5000);
     }
 
-    // HACK: Commented because BindToContext was hanging (deadlock?)
+    // HACK: Commented as BindToContext was hanging (deadlock?)
     // if(mpViewer)
     //     pangolin::BindToContext("ORB-SLAM2: Map Viewer");
 }
@@ -488,6 +491,19 @@ vector<cv::KeyPoint> System::GetTrackedKeyPointsUn()
 {
     unique_lock<mutex> lock(mMutexState);
     return mTrackedKeyPointsUn;
+}
+
+// NXT: Image of path (computed by ControllerNXT, displayed by Viewer)
+void System::SetImagePath(cv::Mat img)
+{
+    unique_lock<mutex> lock(mMutexImagePath);
+    imPath = img.clone();
+}
+
+cv::Mat System::GetImagePath()
+{
+    unique_lock<mutex> lock(mMutexImagePath);
+    return imPath;
 }
 
 } //namespace ORB_SLAM
