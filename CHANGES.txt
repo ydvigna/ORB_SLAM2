@@ -4,4 +4,6 @@ Control of NXT is done by Computer Vision techniques.
 Changes from original:
 - ROS Examples folder: New node for NXT control with computer vision
 - Added new node to CMakeLists.txt
+- Changes to System.cc, System.h, Viewer.cc: modifications for NXT and computer vision
+- Changes to LocalMapping.cc, LoopClosing.cc, Tracking.cc: include some missing libs and comment some display messages
 
