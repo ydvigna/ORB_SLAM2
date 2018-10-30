@@ -180,7 +180,7 @@ private:
     std::vector<cv::KeyPoint> mTrackedKeyPointsUn;
     std::mutex mMutexState;
 
-    // NXT: Image of path (computed by ControllerNXT, used by Viewer)
+    // NXT: Image of path (computed by ControllerNXT, displayed by Viewer)
     std::mutex mMutexImagePath;
     cv::Mat imPath;
 };
