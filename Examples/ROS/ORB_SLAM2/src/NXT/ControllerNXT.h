@@ -11,6 +11,7 @@
 #include <mutex>
 
 #include <opencv2/core/core.hpp>
+#include "opencv2/ximgproc.hpp"
 #include <pangolin/pangolin.h>
 #include"../../../include/System.h"
 
@@ -67,19 +68,21 @@ public:
     int GetDistance();
     int GetAngle();
 
+    // Compute skeleton and find path
+    int ComputeAngle(int x, int y);
+    int ComputeDistance(int y);
+    int FindPath(cv::Mat frame, cv::Mat skeleton);
+    int ComputeSkeleton(cv::Mat frame);
+
     // Motor control
     int SpeedController();
     int TurnController();
 
-    // Test Viewer
-    void MyViewer();
-
-    // Main thread function. 
-    void Run();
-
     // Thread control
     void RequestFinish();
     
+    // Main thread function. 
+    void Run();
 
     // OLD: Main thread function. 
     void OldRun();

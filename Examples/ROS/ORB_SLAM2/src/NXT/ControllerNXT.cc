@@ -1,6 +1,6 @@
 /**
 * This file is a controller for a Lego NXT that uses ORB-SLAM2 and OpenCV
-* 
+*
 */
 
 #include <unistd.h>
@@ -55,13 +55,13 @@ ControllerNXT::ControllerNXT():mbFinishRequested(false){}
 void ControllerNXT::CloseSocket()
 {
     close(nxtSocket);
-} 
+}
 
 int ControllerNXT::InitBluetooth(char *btAddress)
 {
     struct sockaddr_rc addr={0};
     int status;
-    
+
     // Allocate a socket
     nxtSocket = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);
 
@@ -80,7 +80,7 @@ int ControllerNXT::InitBluetooth(char *btAddress)
     return 0;
 }
 
-int ControllerNXT::GetBattery() 
+int ControllerNXT::GetBattery()
 {
     unsigned char cmd[4]={0x02, 0x00, 0x00, 0x0B};
     char reply[16];
@@ -139,14 +139,14 @@ int ControllerNXT::GetBattery()
     return blevel;
 }
 
-int ControllerNXT::SetOutput(unsigned char powerLM, unsigned char powerRM) 
-{   
+int ControllerNXT::SetOutput(unsigned char powerLM, unsigned char powerRM)
+{
     // Commands for left (LM) and right (RM) motors
-    unsigned char cmdLM[15]={0x0D, 0x00, 0x80, 0x04, 0x02, powerLM, 0x07, 0x00, 
+    unsigned char cmdLM[15]={0x0D, 0x00, 0x80, 0x04, 0x02, powerLM, 0x07, 0x00,
                   0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00};
-    unsigned char cmdRM[15]={0x0D, 0x00, 0x80, 0x04, 0x01, powerRM, 0x07, 0x00, 
+    unsigned char cmdRM[15]={0x0D, 0x00, 0x80, 0x04, 0x01, powerRM, 0x07, 0x00,
                   0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00};
-    
+
 
     //- send request -----------------------------------------
     if ( (write(nxtSocket, cmdLM, 15) < 0 ) || (write(nxtSocket, cmdRM, 15) < 0) ) {
@@ -174,6 +174,143 @@ int ControllerNXT::GetAngle()
     return angle;
 }
 
+int ControllerNXT::ComputeAngle(int x, int y)
+{
+	return (int)(atan((double)x/y) * 180 / M_PI);
+}
+
+// TODO: adjust values
+int ControllerNXT::ComputeDistance(int y)
+{
+	float w;
+	float b_r = 100.0; // real distance to point b (cm)
+    float a = 89.0; // origin
+	float b = 226.0; // height of point b (pixels)
+	float v = 514.0; // height of vanishing point (pixels)
+	
+	w = b_r / ((((y-a) * (v-b)) / ((y-b) * (v-a))) - 1);
+	return (int)(b_r + w);
+}
+
+// TODO: add recursion to find multiple paths
+int ControllerNXT::FindPath(cv::Mat frame, cv::Mat skeleton)
+{
+    cv::Mat path;
+    cv::cvtColor(skeleton, path, cv::COLOR_GRAY2BGR);
+
+	int x_start = -1, y_start= -1; // coordinates of start of skeleton
+    int x = path.cols / 2;
+    int y = path.rows - 5;
+    int xstep;
+    int x_max_step = 3*path.cols/8; // ignore left and right corners of the image
+    bool decrease_step = false;
+
+    // search for starting point
+    for (; y > 2*path.rows/3; y--) {
+		xstep = 0;
+        while (xstep < x_max_step) {
+            if (skeleton.at<uchar>(y, x - xstep) == 255) {
+                x_start = x - xstep;
+				y_start = y;
+				y = 0;
+                break;
+            }
+            if (skeleton.at<uchar>(y, x + xstep) == 255) {
+                x_start = x + xstep;
+				y_start = y;
+				y = 0;
+                break;
+            }
+            xstep++;
+        }
+		if (decrease_step)
+			x_max_step--;
+
+		decrease_step = !decrease_step;
+    }
+    if (x_start < 0 || y_start < 0) {
+        // cout << "Failed to find initial point" << endl;
+        return -1;
+    }
+
+	// cout << "Distance: " << ComputeDistance(path.rows - y_start) << endl;
+	// cout << "Angle: " << ComputeAngle(x_start - path.cols/2, path.rows - y_start) << endl;
+
+    bool b_left = false;
+    bool b_right = false;
+	x = x_start;
+	y = y_start;
+
+    // find path along skeleton
+    while (y > 2*path.rows/3 && x > 0 && x < path.cols-2) {
+    	if (skeleton.at<uchar>(y-1, x) == 255) { // up
+			y = y-1;
+			b_left = false;
+			b_right = false;
+        }
+		else if (skeleton.at<uchar>(y-1, x-1) == 255) { // diagonal left
+			y = y-1;
+			x = x-1;
+			b_left = false;
+			b_right = false;
+        }
+        else if (skeleton.at<uchar>(y-1, x+1) == 255) { // diagonal right
+            y = y-1;
+            x = x+1;
+            b_left = false;
+            b_right = false;
+        }
+        else if (skeleton.at<uchar>(y, x-1) == 255 && !b_right) { // left
+            x = x-1;
+            b_left = true;
+        }
+        else if( skeleton.at<uchar>(y, x+1) == 255 && !b_left ) { // right
+            x = x+1;
+            b_right = true;
+        }
+        else
+            break;
+
+        // cv::circle(path, cv::Point(x, y), 1, cv::Scalar(0,128,0), cv::FILLED);
+		cv::circle(frame, cv::Point(2*x, y), 1, cv::Scalar(0,0,255), cv::FILLED);
+    }
+
+    cv::circle(frame, cv::Point(2*x_start, y_start), 3, cv::Scalar(255,0,0), cv::FILLED);
+
+    return 0;
+}
+
+int ControllerNXT::ComputeSkeleton(cv::Mat frame)
+{
+    cv::Mat image, binary, skeleton;
+    // image = frame.clone();
+    cv::resize(frame, image, cv::Size(), 0.5, 0.5);
+
+    cv::resize(image, binary, cv::Size(), 0.5, 1.0);
+    cv::cvtColor(binary, binary, cv::COLOR_BGR2GRAY);
+    cv::GaussianBlur(binary, binary, cv::Size(7,7), 1.5, 1.5);
+    cv::threshold(binary, binary, 130, 255, cv::THRESH_BINARY); 
+
+	int w = binary.cols/100;
+    cv::morphologyEx(binary, binary, cv::MORPH_ERODE, cv::getStructuringElement(0, cv::Size(2*w+1, 2*w+1)));
+    // cv::morphologyEx(binary, binary, cv::MORPH_OPEN, cv::getStructuringElement(0, cv::Size(17,17)));
+    cv::morphologyEx(binary, binary, cv::MORPH_CLOSE, cv::getStructuringElement(0, cv::Size(4*w+1, 4*w+1)));
+
+    cv::ximgproc::thinning(binary, skeleton);
+    
+    FindPath(image, skeleton);
+
+    // Merge binary with original
+    cv::resize(binary, binary, image.size());
+    cv::cvtColor(binary, binary, cv::COLOR_GRAY2BGR);
+    image = binary*0.4 + image*0.6;
+
+    cv::resize(image, frame, frame.size());
+
+    return 0;
+}
+
+
 int ControllerNXT::SpeedController()
 {
     int result;
@@ -191,7 +328,7 @@ int ControllerNXT::SpeedController()
         power = gain * error;
         power = fmax(fmin(power, 50), -50);
         cout << " Power norm.: " << (int)power << endl;
-        
+
         // if ( (result = SetOutput((int)power, (int)power)) < 0 ) {
         //     cout << "SetOutput error: " << result << endl;
         // }
@@ -199,7 +336,7 @@ int ControllerNXT::SpeedController()
         msrdist = GetDistance();
         error = refdist - msrdist;
     }
-    
+
     printf("Stopping\n");
     // if ( (result = SetOutput(0, 0)) < 0 ) {
     //     cout << "SetOutput error: " << result << endl;
@@ -225,46 +362,21 @@ int ControllerNXT::TurnController()
         power = gain * error;
         power = fmax(fmin(power, 40), -40);
         printf("Power norm.: ( %d; %d )\n", (int)power, -(int)power);
-        
+
         // if ( (result = SetOutput((int)power, -(int)power)) < 0 ) {
         //     return result;
         // }
-        
+
         msrang = GetAngle();
         error = refang - msrang;
     }
-    
+
     printf("Stopping\n");
     // if ( (result = SetOutput(0, 0)) < 0 ) {
     //     return result;
     // }
 
     return 0;
-}
-
-// TODO: remove
-void ControllerNXT::MyViewer()
-{
-    cout << "Showing view" << endl;
-
-    cv::Mat image;
-    // image = cv::imread("image_test.jpg" , CV_LOAD_IMAGE_COLOR);
-  
-    // if(! image.data ) {
-    //     std::cout <<  "Could not open or find the image" << std::endl ;
-    //     return -1;
-    // }
-    
-    // cv::namedWindow("ORB-SLAM2: My Test Frame");
-
-    // cv::imshow("ORB-SLAM2: Current Frame",im);
-    // cv::waitKey(0);
-
-    // sleep(5);
-    // cv::destroyWindow("ORB-SLAM2: My Test Frame");
-
-    cout << "Ending view" << endl;
-
 }
 
 void ControllerNXT::RequestFinish()
@@ -282,14 +394,13 @@ bool ControllerNXT::CheckFinish()
 
 void ControllerNXT::Run()
 {
-    // int powerLM, powerRM; // (-100%, 100%) = (256-100, 256] U (0, 100)
-    
+    // Control variables
     int result;
     float power;
 
     const int ReferenceDistance = 20;
     int MeasuredDistance;
-    const float ForwardGain = -5.0; // proportional gain (TODO:adjust later)
+    const float ForwardGain = -3.0; // proportional gain (TODO:adjust later)
     int ForwardError;
 
     const int ReferenceAngle = 0;
@@ -297,66 +408,106 @@ void ControllerNXT::Run()
     const float TurnGain = -2.0;    // proportional gain (TODO:adjust later)
     int TurnError;
 
-    // MyViewer();
+    // NXT brick bluetooth address
+    char btaddress[18] = "00:16:53:1B:75:E8";
 
-    // // nxt brick bluetooth address
-    // char btaddress[18] = "00:16:53:1B:75:E8";
+    if (InitBluetooth(btaddress) < 0) {
+        CloseSocket();
+        return;
+    }
+    cout << "NXT: Bluetooth connected to address " << btaddress << endl;
 
-    // if (InitBluetooth(btaddress) < 0) {
-    //     CloseSocket();
-    //     return;
-    // }
-    // printf("bluetooth connected to %s \n", btaddress);
+    // Get battery level (direct command)
+    int blevel;
+    blevel = GetBattery();
+    if (blevel < 0) {
+        CloseSocket();
+        return;
+    }
+    printf("NXT: Battery level %.2f\n", blevel/100.00);
 
-    // // get battery level (direct command)
-    // int blevel;
-    // blevel = GetBattery();
-    // if (blevel < 0) {
-    //     CloseSocket();
-    //     return;
-    // }
-    // printf("battery level: %.2f\n", blevel/100.00);
+    // Image processing variables
+    cv::Mat im, Tcw;
+    int status;
+    vector<cv::KeyPoint> vKeys;
+    vector<MapPoint*> vMPs;
 
-    // SpeedController();
-    // TurnController();
+    for (;;) {
+        GetImagePose(im,Tcw,status,vKeys,vMPs);
+        if(im.empty())
+            cv::waitKey(mT);
+        else
+            break;
+    }
 
-    while(1)
-    {
-        MeasuredDistance = GetDistance();
+    int count = 0;
+
+    // Main loop
+    for (;;) {
+        // Get last image and its computed pose from SLAM
+        GetImagePose(im,Tcw,status,vKeys,vMPs);
+
+        cv::Mat frame = im.clone();
+        ComputeSkeleton(frame);
+
+        // HACK: send processed image to System >> Viewer
+        mpSystem->SetImagePath(frame);
+
+        if(CheckFinish())
+        {
+            printf("Stopping ControllerNXT\n");
+            break;
+        }
+        
+        if (count < 100) {
+            count++;
+            usleep(1000);
+            continue;
+        } 
+        else {
+            count = 0;
+            SetOutput(0, 0);
+        }
+        
+        cout << "Input distance + angle: ";
+        cin >> MeasuredDistance >> MeasuredAngle;
+
+        // MeasuredDistance = GetDistance();
+        // MeasuredAngle = GetAngle();
+
         ForwardError = ReferenceDistance - MeasuredDistance;
-
-        MeasuredAngle = GetAngle();
         TurnError = ReferenceAngle - MeasuredAngle;
 
+        // Compute power for each motor LR and normalize before sending to NXT
         if ( fabs(TurnError) > 4 )
         {
             power = TurnGain * TurnError;
             power = fmax(fmin(power, 40), -40);
-            cout << "Power (normalized): " << (int)power << "; " << -(int)power << endl;
-            
-            // if ( (result = SetOutput((int)power, -(int)power)) < 0 ) {
-            //     return result;
-            // }
+            cout << "Power LR: " << (int)power << "; " << -(int)power << endl;
+
+            if ( (result = SetOutput((int)power, -(int)power)) < 0 ) {
+                cout << "SetOutput error: " << result << endl;
+            }
         }
         else if ( fabs(ForwardError) > 4 )
         {
             power = ForwardGain * ForwardError;
             power = fmax(fmin(power, 50), -50);
-            cout << " Power (normalized): " << (int)power << endl;
-            
-            // if ( (result = SetOutput((int)power, (int)power)) < 0 ) {
-            //     cout << "SetOutput error: " << result << endl;
-            // }
+            cout << " Power LR: " << (int)power << endl;
+
+            if ( (result = SetOutput((int)power, (int)power)) < 0 ) {
+                cout << "SetOutput error: " << result << endl;
+            }
         }
         else
         {
             printf("Stopping\n");
-            // if ( (result = SetOutput(0, 0)) < 0 ) {
-            //     cout << "SetOutput error: " << result << endl;
-            // }
+            if ( (result = SetOutput(0, 0)) < 0 ) {
+                cout << "SetOutput error: " << result << endl;
+            }
         }
 
-
+        // int powerLM, powerRM; // (-100%, 100%) = (256-100, 256] U (0, 100)
         // cout << "Enter power of motors: ";
         // while ( !(cin >> powerLM >> powerRM) )
         // {
@@ -372,21 +523,21 @@ void ControllerNXT::Run()
         if(CheckFinish())
         {
             printf("Stopping ControllerNXT\n");
-            // SetOutput(0, 0);
+            SetOutput(0, 0);
             break;
         }
 
         usleep(1000);
     }
 
-    // CloseSocket();
+    CloseSocket();
 }
 
 void ControllerNXT::OldRun()
 {
     int w,h,wui;
 
-    cv::Mat im, Tcw, imTest;
+    cv::Mat im, Tcw;
     int status;
     vector<cv::KeyPoint> vKeys;
     vector<MapPoint*> vMPs;
@@ -460,7 +611,10 @@ void ControllerNXT::OldRun()
 
         // Get last image and its computed pose from SLAM
         GetImagePose(im,Tcw,status,vKeys,vMPs);
-        cv::Mat imTest = im.clone(); // TEST: new window
+
+        // TEST: new window
+        cv::Mat imTest = im.clone();
+        cv::cvtColor(imTest, imTest, cv::COLOR_BGR2RGB);
 
         // Add text to image
         PrintStatus(status,bLocalizationMode,im);
@@ -562,7 +716,7 @@ void ControllerNXT::OldRun()
         }
 
         pangolin::FinishFrame();
-        
+
         // TEST: new window
         cv::imshow("ORB-SLAM2: My Test Frame",imTest);
         cv::waitKey(1);
@@ -579,7 +733,7 @@ void ControllerNXT::OldRun()
 
 }
 
-void ControllerNXT::SetImagePose(const cv::Mat &im, const cv::Mat &Tcw, const int &status, const vector<cv::KeyPoint> &vKeys, 
+void ControllerNXT::SetImagePose(const cv::Mat &im, const cv::Mat &Tcw, const int &status, const vector<cv::KeyPoint> &vKeys,
                                  const vector<ORB_SLAM2::MapPoint*> &vMPs)
 {
     unique_lock<mutex> lock(mMutexPoseImage);
@@ -590,7 +744,7 @@ void ControllerNXT::SetImagePose(const cv::Mat &im, const cv::Mat &Tcw, const in
     mvMPs = vMPs;
 }
 
-void ControllerNXT::GetImagePose(cv::Mat &im, cv::Mat &Tcw, int &status, std::vector<cv::KeyPoint> &vKeys, 
+void ControllerNXT::GetImagePose(cv::Mat &im, cv::Mat &Tcw, int &status, std::vector<cv::KeyPoint> &vKeys,
                                  std::vector<MapPoint*> &vMPs)
 {
     unique_lock<mutex> lock(mMutexPoseImage);

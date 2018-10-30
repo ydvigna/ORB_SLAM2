@@ -57,11 +57,8 @@ int main(int argc, char **argv)
         return 1;
     }    
 
-    // bt_test();
-
-
     // Create SLAM system. It initializes all system threads and gets ready to process frames.
-    //   bool bUseViewer : windows for map and current frame (DONT use with cv window from ControllerNXT)
+    // - bool bUseViewer : windows for map and current frame (DONT use with cv window from ControllerNXT)
     ORB_SLAM2::System SLAM(argv[1],argv[2],ORB_SLAM2::System::MONOCULAR,true);
 
     controllerNXT.SetSLAM(&SLAM);
@@ -126,24 +123,6 @@ int main(int argc, char **argv)
     return 0;
 }
 
-// void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
-// {
-//     // Copy the ros image message to cv::Mat.
-//     cv_bridge::CvImageConstPtr cv_ptr;
-//     try
-//     {
-//         cv_ptr = cv_bridge::toCvShare(msg);
-//     }
-//     catch (cv_bridge::Exception& e)
-//     {
-//         ROS_ERROR("cv_bridge exception: %s", e.what());
-//         return;
-//     }
-
-//     mpSLAM->TrackMonocular(cv_ptr->image,cv_ptr->header.stamp.toSec());
-// }
-
-
 void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
 {
     // Copy the ros image message to cv::Mat.
@@ -167,12 +146,8 @@ void ImageGrabber::GrabImage(const sensor_msgs::ImageConstPtr& msg)
 
     cv::undistort(im,imu,K,DistCoef);
 
-    if(bRGB)
-        controllerNXT.SetImagePose(imu,Tcw,state,vKeys,vMPs);
-    else
-    {
-        cv::cvtColor(imu,imu,CV_RGB2BGR);
-        controllerNXT.SetImagePose(imu,Tcw,state,vKeys,vMPs);
-    }    
+    // if(!bRGB)
+        cv::cvtColor(imu,imu,CV_BGR2RGB);
+    controllerNXT.SetImagePose(imu,Tcw,state,vKeys,vMPs);
 }
 
