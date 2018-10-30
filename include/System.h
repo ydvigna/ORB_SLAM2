@@ -122,6 +122,11 @@ public:
     std::vector<MapPoint*> GetTrackedMapPoints();
     std::vector<cv::KeyPoint> GetTrackedKeyPointsUn();
 
+    // HACK: Image path (processed by ControllerNXT, shown by Viewer)
+    void SetImagePath(cv::Mat img);
+    cv::Mat GetImagePath();
+    
+
 private:
 
     // Input sensor
@@ -174,6 +179,10 @@ private:
     std::vector<MapPoint*> mTrackedMapPoints;
     std::vector<cv::KeyPoint> mTrackedKeyPointsUn;
     std::mutex mMutexState;
+
+    // HACK: Image path (processed by ControllerNXT, shown by Viewer)
+    std::mutex mMutexImagePath;
+    cv::Mat imPath;
 };
 
 }// namespace ORB_SLAM
