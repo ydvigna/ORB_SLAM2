@@ -147,7 +147,7 @@ void Viewer::Run()
         // NXT: Image of path (computed by ControllerNXT)
         cv::Mat imPath = mpSystem->GetImagePath();
         if (!imPath.empty())
-            cv::imshow("ORB-SLAM2: My Test Frame",imPath);
+            cv::imshow("ORB-SLAM2: Path Detection",imPath);
 
         cv::waitKey(mT);
 
